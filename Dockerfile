@@ -10,4 +10,4 @@ COPY . .
 
 EXPOSE ${PORT:-3000}
 
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "PORT=${PORT:-3000} npm run start"]
