@@ -1,8 +1,13 @@
-FROM node@sha256:a7c10fad0b8fa59578bf3cd1717b168df134db8362b89e1ea6f54676fee49d3b
+FROM node@sha256:d7ecd44a5983a6647565509527498f1051ba409cfe847d2ab514fd67c2d67a2a
+
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install
 RUN npx playwright install chromium --with-deps
+
 COPY . .
+
 EXPOSE ${PORT:-3000}
+
 CMD ["npm", "run", "start"]
