@@ -2,7 +2,7 @@ version: '3.8'
 services:
   playwright:
     image: mcr.microsoft.com/playwright:v1.53.1-jammy
-    container_name: playwright-server
+    container_name: playwright-custom-server
     ports:
       - '9323:9323'
     environment:
