@@ -1,0 +1,36 @@
+version: '3.8'
+services:
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.53.1-jammy
+    container_name: playwright-server
+    ports:
+      - '9323:9323'
+    environment:
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - PLAYWRIGHT_WS_ENDPOINT=0.0.0.0:9323
+    volumes:
+      - './playwright.config.ts:/work/playwright.config.ts:ro'
+      - 'playwright-data:/ms-playwright'
+      - './tests:/work/tests'
+    working_dir: /work
+    command:
+      - npx
+      - playwright
+      - test
+      - '--config=playwright.config.ts'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9323/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - playwright-net
+
+volumes:
+  playwright-data:
+
+networks:
+  playwright-net:
+    driver: bridge
