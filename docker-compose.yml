@@ -1,5 +1,7 @@
+version: "3.8"
 services:
-  app:
+  pw-server-manager:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,10 +12,8 @@ services:
       - /app/node_modules
     environment:
       - NODE_ENV=development
-      - PORT=${PORT:-3000}
     networks:
       - app-network
-
 networks:
   app-network:
     driver: bridge
