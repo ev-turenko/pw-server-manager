@@ -1,0 +1,13 @@
+{
+  "name": "express-playwright-api",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "5.1.0",
+    "@playwright/test": "1.53.0"
+  },
+  "type": "module"
+}
