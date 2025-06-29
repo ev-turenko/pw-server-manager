@@ -1,4 +1,4 @@
-FROM node@sha256:5340cbfc2df14331ab021555fdd9f83f072ce811488e705b0e736b11adeec4bb
+FROM node:20-bookworm
 
 WORKDIR /app
 
