@@ -1,5 +1,6 @@
 import express from 'express';
 import { chromium } from 'playwright';
+import { WebSocketServer } from 'ws';
 
 const app = express();
 const port = process.env.PORT || 3011;
@@ -17,6 +18,66 @@ let serverMetadata = {
     browserVersion: null,
     totalWorkers: 0
 };
+
+const server = app.listen(port, () => {
+    console.log(`Express server running at http://localhost:${port}`);
+    console.log(`WebSocket server available at ws://localhost:${port}`);
+});
+
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+    console.log('New WebSocket connection');
+    activeConnections++;
+    const workerId = `ws-${Date.now()}`;
+    
+    activeWorkers.set(workerId, {
+        id: workerId,
+        lastActivity: new Date(),
+        endpoint: 'WebSocket',
+        method: 'WS'
+    });
+
+    ws.send(JSON.stringify({
+        type: 'metadata',
+        data: {
+            ...serverMetadata,
+            totalWorkers: activeWorkers.size
+        }
+    }));
+
+    ws.on('message', (message) => {
+        console.log(`Received from ${workerId}: ${message}`);
+        activeWorkers.get(workerId).lastActivity = new Date();
+        
+        try {
+            const data = JSON.parse(message);
+            
+            ws.send(JSON.stringify({
+                type: 'echo',
+                data: data,
+                timestamp: new Date().toISOString()
+            }));
+        } catch (error) {
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: 'Invalid JSON message'
+            }));
+        }
+    });
+
+    ws.on('close', () => {
+        console.log(`WebSocket connection ${workerId} closed`);
+        activeConnections--;
+        activeWorkers.delete(workerId);
+    });
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        activeConnections--;
+        activeWorkers.delete(workerId);
+    });
+});
 
 app.use((req, res, next) => {
     activeConnections++;
@@ -53,6 +114,7 @@ app.post('/api/chromium/start', async (req, res) => {
                 command: 'npm run start',
                 url: `http://localhost:${port}`,
                 reuseExistingServer: !process.env.CI,
+                timeout: 18000000
             }
         });
 
@@ -66,6 +128,15 @@ app.post('/api/chromium/start', async (req, res) => {
             browserVersion: await browser.version(),
             totalWorkers: activeWorkers.size
         };
+
+        wss.clients.forEach(client => {
+            if (client.readyState === client.OPEN) {
+                client.send(JSON.stringify({
+                    type: 'browser_started',
+                    data: serverMetadata
+                }));
+            }
+        });
 
         res.json({ 
             message: 'Playwright webserver started', 
@@ -96,6 +167,15 @@ app.post('/api/chromium/stop', async (req, res) => {
             totalWorkers: 0
         };
 
+        wss.clients.forEach(client => {
+            if (client.readyState === client.OPEN) {
+                client.send(JSON.stringify({
+                    type: 'browser_stopped',
+                    data: serverMetadata
+                }));
+            }
+        });
+
         res.json({ message: 'Playwright webserver stopped' });
     } catch (error) {
         res.status(500).json({ 
@@ -108,7 +188,8 @@ app.post('/api/chromium/stop', async (req, res) => {
 app.get('/api/chromium/connections', (req, res) => {
     res.json({ 
         activeConnections,
-        activeWorkers: activeWorkers.size
+        activeWorkers: activeWorkers.size,
+        websocketConnections: Array.from(wss.clients).filter(c => c.readyState === c.OPEN).length
     });
 });
 
@@ -126,7 +207,8 @@ app.get('/api/chromium/workers', (req, res) => {
 app.get('/api/chromium/metadata', (req, res) => {
     res.json({
         ...serverMetadata,
-        totalWorkers: activeWorkers.size
+        totalWorkers: activeWorkers.size,
+        websocketSupported: true
     });
 });
 
@@ -137,10 +219,27 @@ app.get('/api/chromium/health', (req, res) => {
             ? (new Date() - serverMetadata.startTime) / 1000 + ' seconds' 
             : 'not running',
         connections: activeConnections,
-        workers: activeWorkers.size
+        workers: activeWorkers.size,
+        websockets: Array.from(wss.clients).filter(c => c.readyState === c.OPEN).length
     });
 });
 
-app.listen(port, () => {
-    console.log(`Express server running at http://localhost:${port}`);
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received. Shutting down gracefully...');
+    wss.clients.forEach(client => client.close());
+    wss.close();
+    server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received. Shutting down gracefully...');
+    wss.clients.forEach(client => client.close());
+    wss.close();
+    server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+    });
 });
